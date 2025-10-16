@@ -1,7 +1,7 @@
 import socket
 
-from artnet import packet
-from artnet.universe import ArtnetUniverse
+from pythonartnet import packet
+from pythonartnet.universe import ArtnetUniverse
 
 
 class ArtnetBroadcaster:

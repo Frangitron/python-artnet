@@ -1,4 +1,4 @@
-from artnet import packet
+from pythonartnet import packet
 
 
 class ArtnetUniverse:

@@ -9,7 +9,7 @@ import sys
 
 from PySide6.QtWidgets import QApplication, QHBoxLayout, QWidget
 
-from artnet.broadcaster import ArtnetBroadcaster
+from pythonartnet.broadcaster import ArtnetBroadcaster
 
 from pyside6helpers.slider import Slider
 
@@ -44,10 +44,10 @@ class ArtnetWidget(QWidget):
 
     def _on_slider_value_changed(self, idx: int, value: int):
         self._artnet.universes[0].buffer[idx] = value
-        
+
         # Sends DMX packets only, no Artsync
         self._artnet.send_data()
-        
+
         # Sends DMX packets and an Artsync packet as well, useful with several universes
         self._artnet.send_data_synced()
 

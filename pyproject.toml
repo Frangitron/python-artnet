@@ -5,7 +5,7 @@ requires = [
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "artnet"
+name = "pythonartnet"
 description = "Simple Artnet and Artsync packet broadcaster"
 readme = "README.md"
 requires-python = ">=3.11"
