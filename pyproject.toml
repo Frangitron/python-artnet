@@ -1,0 +1,24 @@
+[build-system]
+requires = [
+    "setuptools>=46.0",
+]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "artnet"
+description = "Simple Artnet and Artsync packet broadcaster"
+readme = "README.md"
+requires-python = ">=3.11"
+license = {file = "LICENSE"}
+authors = [
+    { name = "Frangitron", email = "contact@frangitron.com" }
+]
+maintainers = [
+    { name = "Frangitron", email = "contact@frangitron.com" }
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Programming Language :: Python :: 3 :: Only",
+]
+keywords = ["python", "frangitron", "artnet"]
+dynamic = ["version"]
