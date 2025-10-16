@@ -5,7 +5,9 @@ Simple Artnet and Artsync packet broadcaster
 ## Usage
 
 ```python
-from PySide6.QtWidgets import QWidget, QHBoxLayout
+import sys
+
+from PySide6.QtWidgets import QApplication, QHBoxLayout, QWidget
 
 from artnet.broadcaster import ArtnetBroadcaster
 
@@ -51,9 +53,6 @@ class ArtnetWidget(QWidget):
 
 
 if __name__ == "__main__":
-    import sys
-    from PySide6.QtWidgets import QApplication
-
     app = QApplication(sys.argv)
     app.setOrganizationName("Frangitron")
 
