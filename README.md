@@ -23,7 +23,9 @@ class ArtnetWidget(QWidget):
         self._artnet = ArtnetBroadcaster(target_ip)
         self._artnet.add_universe(universe_number)
 
-        QApplication.instance().setApplicationName(f"Artnet mini - {target_ip} universe {universe_number}")
+        QApplication.instance().setApplicationName(
+            f"Artnet mini - {target_ip} universe {universe_number}"
+        )
 
         self._sliders: list[Slider] = []
         layout = QHBoxLayout(self)
@@ -40,8 +42,12 @@ class ArtnetWidget(QWidget):
 
     def _on_slider_value_changed(self, idx: int, value: int):
         self._artnet.universes[0].buffer[idx] = value
-        self._artnet.send_data() # Sends DMX packets only, no Artsync
-        self._artnet.send_data_synced()  # Sends DMX packets and an Artsync packet as well, useful with several universes
+        
+        # Sends DMX packets only, no Artsync
+        self._artnet.send_data()
+        
+        # Sends DMX packets and an Artsync packet as well, useful with several universes
+        self._artnet.send_data_synced()
 
 
 if __name__ == "__main__":
