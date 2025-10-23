@@ -4,6 +4,10 @@ from pythonartnet import packet
 from pythonartnet.universe import ArtnetUniverse
 
 
+class ArtnetBroadcastError(OSError):
+    pass
+
+
 class ArtnetBroadcaster:
     UDP_PORT = 6454
 
@@ -15,6 +19,8 @@ class ArtnetBroadcaster:
         self._socket.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
         self._socket.settimeout(1)  # todo check if OK
 
+        print(f"Artnet broadcaster created, target ip {target_ip}")
+
     def add_universe(self, universe_number: int):
         if universe_number in self.universes:
             raise ValueError(f"Universe {universe_number} already exists")
@@ -22,9 +28,12 @@ class ArtnetBroadcaster:
         self.universes[universe_number] = ArtnetUniverse(universe_number)
 
     def send_data(self):
-        for universe in self.universes.values():
-            packet = universe.make_packet()
-            self._socket.sendto(packet, (self.target_ip, self.UDP_PORT))
+        try:
+            for universe in self.universes.values():
+                packet_ = universe.make_packet()
+                self._socket.sendto(packet_, (self.target_ip, self.UDP_PORT))
+        except OSError:
+            raise ArtnetBroadcastError(f"Failed to Artnet send data to {self.target_ip}")
 
     def send_artsync(self):
         self._socket.sendto(packet.ARTSYNC_PACKET, (self.target_ip, self.UDP_PORT))
