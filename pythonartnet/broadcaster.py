@@ -33,7 +33,7 @@ class ArtnetBroadcaster:
                 packet_ = universe.make_packet()
                 self._socket.sendto(packet_, (self.target_ip, self.UDP_PORT))
         except OSError:
-            raise ArtnetBroadcastError(f"Failed to Artnet send data to {self.target_ip}")
+            raise ArtnetBroadcastError(f"Impossible to send to {self.target_ip}")
 
     def send_artsync(self):
         self._socket.sendto(packet.ARTSYNC_PACKET, (self.target_ip, self.UDP_PORT))
