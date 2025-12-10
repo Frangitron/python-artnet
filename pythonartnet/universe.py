@@ -8,5 +8,9 @@ class ArtnetUniverse:
         self._universe_number = universe_number
         self._packet_maker = packet.DmxPacketMaker(self._universe_number)
 
+    @property
+    def number(self):
+        return self._universe_number
+
     def make_packet(self) -> bytearray:
         return self._packet_maker.make_dmx_packet(self.buffer)
