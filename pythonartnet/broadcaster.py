@@ -21,6 +21,9 @@ class ArtnetBroadcaster:
             self._socket.bind((bind_address, 0))
         self._socket.settimeout(1)  # todo check if OK
 
+    def clear(self):
+        self.universes.clear()
+
     def add_universe(self, universe_number: int):
         if universe_number in self.universes:
             raise ValueError(f"Universe {universe_number} already exists")
