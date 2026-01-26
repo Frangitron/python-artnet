@@ -41,7 +41,7 @@ class ArtnetWidget(QWidget):
         self._artnet.universes[0].buffer[idx] = value
 
         # Sends DMX packets only, no Artsync
-        self._artnet.send_data()
+        #self._artnet.send_data()
 
         # Sends DMX packets and an Artsync packet as well, useful with several universes
         self._artnet.send_data_synced()
