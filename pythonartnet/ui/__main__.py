@@ -1,7 +1,9 @@
 import sys
-from PySide6.QtCore import QSettings
+import time
+import math
+from PySide6.QtCore import QSettings, QTimer
 
-from PySide6.QtWidgets import QApplication, QHBoxLayout, QWidget, QVBoxLayout, QLabel, QLineEdit, QSpinBox
+from PySide6.QtWidgets import QApplication, QHBoxLayout, QWidget, QVBoxLayout, QLabel, QLineEdit, QSpinBox, QCheckBox
 
 from pythonartnet.broadcaster import ArtnetBroadcaster
 
@@ -53,6 +55,13 @@ class ArtnetWidget(QWidget):
         main_layout.addLayout(self._sliders_layout)
 
         self._sliders: list[Slider] = []
+        self._lfo_checkboxes: list[QCheckBox] = []
+
+        self._timer = QTimer(self)
+        self._timer.setInterval(1000 / 40)
+        self._timer.timeout.connect(self._on_timer)
+        self._timer.start()
+
         self._rebuild_sliders()
 
     def _setup_artnet(self):
@@ -74,15 +83,34 @@ class ArtnetWidget(QWidget):
 
     def _rebuild_sliders(self):
         # Clear existing sliders
-        for slider in self._sliders:
-            self._sliders_layout.removeWidget(slider)
-            slider.deleteLater()
+        for i in range(self._sliders_layout.count()):
+            item = self._sliders_layout.itemAt(i)
+            if item.widget():
+                item.widget().deleteLater()
+            elif item.layout():
+                # layout items are tricky, usually easier to clear the list if we store containers
+                pass
+
+        # Actually, let's just clear the layout properly
+        while self._sliders_layout.count():
+            child = self._sliders_layout.takeAt(0)
+            if child.widget():
+                child.widget().deleteLater()
+            elif child.layout():
+                # Recursively delete layout
+                self._clear_layout(child.layout())
+
         self._sliders.clear()
+        self._lfo_checkboxes.clear()
 
         # Create new sliders based on start_channel
         for i in range(8):
             ch_idx = i + self._start_channel - 1
             if ch_idx > 511: break
+
+            container = QWidget()
+            v_layout = QVBoxLayout(container)
+            v_layout.setContentsMargins(0, 0, 0, 0)
 
             new_slider = Slider(
                 name=f"CH {ch_idx + 1}",
@@ -90,8 +118,48 @@ class ArtnetWidget(QWidget):
                 on_value_changed=lambda value, idx=ch_idx: self._on_slider_value_changed(idx, value),
                 is_vertical=True
             )
+            v_layout.addWidget(new_slider)
+
+            lfo_check = QCheckBox("LFO")
+            v_layout.addWidget(lfo_check)
+
             self._sliders.append(new_slider)
-            self._sliders_layout.addWidget(new_slider)
+            self._lfo_checkboxes.append(lfo_check)
+            self._sliders_layout.addWidget(container)
+
+    def _clear_layout(self, layout):
+        if layout is not None:
+            while layout.count():
+                item = layout.takeAt(0)
+                widget = item.widget()
+                if widget is not None:
+                    widget.deleteLater()
+                else:
+                    self._clear_layout(item.layout())
+
+    def _on_timer(self):
+        t = time.time()
+        any_lfo = False
+        for i, lfo_check in enumerate(self._lfo_checkboxes):
+            if lfo_check.isChecked():
+                any_lfo = True
+                ch_idx = i + self._start_channel - 1
+                if ch_idx > 511: continue
+
+                # cos(t) ranges from -1 to 1.
+                # (cos(t) + 1) / 2 ranges from 0 to 1.
+                # * 255 ranges from 0 to 255.
+                val = int((math.cos(t * 2 * math.pi) + 1) / 2 * 255)
+                self._artnet.universes[self._universe_number].buffer[ch_idx] = val
+
+                # Update slider UI without triggering on_value_changed
+                self._sliders[i].slider.blockSignals(True)
+                self._sliders[i].slider.setValue(val)
+                self._sliders[i].slider.blockSignals(False)
+                self._sliders[i]._update_label(val)
+
+        if any_lfo:
+            self._artnet.send_data_synced()
 
     def _on_slider_value_changed(self, idx: int, value: int):
         self._artnet.universes[self._universe_number].buffer[idx] = value
