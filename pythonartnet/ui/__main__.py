@@ -104,7 +104,7 @@ class ArtnetWidget(QWidget):
         self._lfo_checkboxes.clear()
 
         # Create new sliders based on start_channel
-        for i in range(8):
+        for i in range(20):
             ch_idx = i + self._start_channel - 1
             if ch_idx > 511: break
 
