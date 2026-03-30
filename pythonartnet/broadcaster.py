@@ -15,10 +15,22 @@ class ArtnetBroadcaster:
         self.target_ip = target_ip
         self.universes: dict[int, ArtnetUniverse] = dict()
 
+        self._bind_address = bind_address
+        self._socket = None
+        self.reset_connection()
+
+    def close(self):
+        """Close the socket and clean up resources."""
+        if self._socket is not None:
+            self._socket.close()
+            self._socket = None
+
+    def reset_connection(self):
+        self.close()
         self._socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self._socket.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-        if bind_address is not None:
-            self._socket.bind((bind_address, 0))
+        if self._bind_address is not None:
+            self._socket.bind((self._bind_address, 0))
         self._socket.settimeout(1)  # todo check if OK
 
     def clear(self):
@@ -41,3 +53,7 @@ class ArtnetBroadcaster:
     def send_data_synced(self):
         self.send_data()
         self.send_artsync()
+
+    def __del__(self):
+        """Ensure socket is closed when object is garbage collected."""
+        self.close()

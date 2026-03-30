@@ -6,6 +6,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pythonartnet"
+version = "0.1.0"
 description = "Simple Artnet and Artsync packet broadcaster"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -21,4 +22,3 @@ classifiers = [
     "Programming Language :: Python :: 3 :: Only",
 ]
 keywords = ["python", "frangitron", "artnet"]
-dynamic = ["version"]
