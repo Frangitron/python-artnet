@@ -3,6 +3,7 @@ import select
 import socket
 import struct
 import sys
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -10,6 +11,8 @@ from typing import Any
 from pythonartnet.broadcaster import ArtnetBroadcaster
 
 DEFAULT_CONFIG_FILE = Path(__file__).with_name("config.json")
+ARTNET_SEND_FPS = 40.0
+ARTNET_SEND_INTERVAL = 1.0 / ARTNET_SEND_FPS
 
 
 @dataclass(frozen=True)
@@ -44,12 +47,15 @@ def main():
     artnet_receive_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     artnet_receive_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     artnet_receive_socket.bind((config.artnet_listen_ip, config.artnet_port))
+    artnet_receive_socket.setblocking(False)
 
     artnet_forward_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    artnet_forward_target = (config.artnet_target_ip, config.artnet_port)
 
     osc_receive_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     osc_receive_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     osc_receive_socket.bind((config.osc_listen_ip, config.osc_listen_port))
+    osc_receive_socket.setblocking(False)
 
     osc_artnet = ArtnetBroadcaster(config.artnet_listen_ip)
     for universe in sorted({entry.universe for entry in mapping.values()}):
@@ -65,38 +71,70 @@ def main():
     print(f"Listening for OSC on {config.osc_listen_ip}:{config.osc_listen_port}")
     print(f"Sending OSC-generated Art-Net to forwarder at {config.artnet_listen_ip}:{config.artnet_port}")
     print(f"Loaded {len(mapping)} OSC mapping(s) from {config_file}")
+    print(f"Continuously sending OSC-generated Art-Net at {ARTNET_SEND_FPS:g} FPS")
+
+    next_artnet_send = time.monotonic()
 
     while True:
-        readable_sockets, _, _ = select.select(sockets, [], [])
+        now = time.monotonic()
+        timeout = max(0.0, next_artnet_send - now)
+
+        readable_sockets, _, _ = select.select(sockets, [], [], timeout)
 
         for readable_socket in readable_sockets:
             if readable_socket is artnet_receive_socket:
-                forward_artnet_packet(
+                forward_pending_artnet_packets(
                     artnet_receive_socket,
                     artnet_forward_socket,
-                    config,
+                    artnet_forward_target,
                 )
 
             elif readable_socket is osc_receive_socket:
-                handle_osc_packet(osc_receive_socket, osc_artnet, mapping)
+                handle_pending_osc_packets(osc_receive_socket, osc_artnet, mapping)
+
+        now = time.monotonic()
+        if now >= next_artnet_send:
+            osc_artnet.send_data_synced()
+            next_artnet_send += ARTNET_SEND_INTERVAL
+
+            if next_artnet_send <= now:
+                next_artnet_send = now + ARTNET_SEND_INTERVAL
 
 
-def forward_artnet_packet(
+def forward_pending_artnet_packets(
     receive_socket: socket.socket,
     send_socket: socket.socket,
-    config: AppConfig,
+    target: tuple[str, int],
 ):
-    packet, _sender = receive_socket.recvfrom(1024)
-    send_socket.sendto(packet, (config.artnet_target_ip, config.artnet_port))
+    while True:
+        try:
+            packet, _sender = receive_socket.recvfrom(1024)
+        except BlockingIOError:
+            return
+
+        send_socket.sendto(packet, target)
 
 
-def handle_osc_packet(
+def handle_pending_osc_packets(
     receive_socket: socket.socket,
     artnet: ArtnetBroadcaster,
     mapping: dict[str, OscMapping],
 ):
-    packet, sender = receive_socket.recvfrom(4096)
+    while True:
+        try:
+            packet, sender = receive_socket.recvfrom(4096)
+        except BlockingIOError:
+            return
 
+        handle_osc_packet(packet, sender, artnet, mapping)
+
+
+def handle_osc_packet(
+    packet: bytes,
+    sender: tuple[str, int],
+    artnet: ArtnetBroadcaster,
+    mapping: dict[str, OscMapping],
+):
     try:
         osc_address, values = parse_osc_message(packet)
     except OscParseError as error:
