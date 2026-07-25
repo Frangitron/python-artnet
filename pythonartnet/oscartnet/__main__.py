@@ -9,14 +9,7 @@ from typing import Any
 
 from pythonartnet.broadcaster import ArtnetBroadcaster
 
-ARTNET_LISTEN_IP = "10.0.0.2"
-ARTNET_TARGET_IP = "192.168.20.7"
-ARTNET_PORT = 6454
-
-OSC_LISTEN_IP = "0.0.0.0"
-OSC_LISTEN_PORT = 8000
-
-DEFAULT_MAPPING_FILE = Path(__file__).with_name("osc_mapping.json")
+DEFAULT_CONFIG_FILE = Path(__file__).with_name("config.json")
 
 
 @dataclass(frozen=True)
@@ -29,49 +22,72 @@ class OscMapping:
         return self.address - 1
 
 
+@dataclass(frozen=True)
+class AppConfig:
+    artnet_listen_ip: str
+    artnet_target_ip: str
+    artnet_port: int
+    osc_listen_ip: str
+    osc_listen_port: int
+    osc_mapping: dict[str, OscMapping]
+
+
 class OscParseError(ValueError):
     pass
 
 
 def main():
-    mapping_file = Path(sys.argv[1]) if len(sys.argv) > 1 else DEFAULT_MAPPING_FILE
-    mapping = load_mapping(mapping_file)
+    config_file = Path(sys.argv[1]) if len(sys.argv) > 1 else DEFAULT_CONFIG_FILE
+    config = load_config(config_file)
+    mapping = config.osc_mapping
 
     artnet_receive_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     artnet_receive_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    artnet_receive_socket.bind((ARTNET_LISTEN_IP, ARTNET_PORT))
+    artnet_receive_socket.bind((config.artnet_listen_ip, config.artnet_port))
 
     artnet_forward_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
     osc_receive_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     osc_receive_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    osc_receive_socket.bind((OSC_LISTEN_IP, OSC_LISTEN_PORT))
+    osc_receive_socket.bind((config.osc_listen_ip, config.osc_listen_port))
 
-    osc_artnet = ArtnetBroadcaster(ARTNET_LISTEN_IP)
+    osc_artnet = ArtnetBroadcaster(config.artnet_listen_ip)
     for universe in sorted({entry.universe for entry in mapping.values()}):
         osc_artnet.add_universe(universe)
 
     sockets = [artnet_receive_socket, osc_receive_socket]
 
-    print(f"Forwarding Art-Net from {ARTNET_LISTEN_IP}:{ARTNET_PORT} to {ARTNET_TARGET_IP}:{ARTNET_PORT}")
-    print(f"Listening for OSC on {OSC_LISTEN_IP}:{OSC_LISTEN_PORT}")
-    print(f"Sending OSC-generated Art-Net to forwarder at {ARTNET_LISTEN_IP}:{ARTNET_PORT}")
-    print(f"Loaded {len(mapping)} OSC mapping(s) from {mapping_file}")
+    print(
+        f"Forwarding Art-Net from "
+        f"{config.artnet_listen_ip}:{config.artnet_port} "
+        f"to {config.artnet_target_ip}:{config.artnet_port}"
+    )
+    print(f"Listening for OSC on {config.osc_listen_ip}:{config.osc_listen_port}")
+    print(f"Sending OSC-generated Art-Net to forwarder at {config.artnet_listen_ip}:{config.artnet_port}")
+    print(f"Loaded {len(mapping)} OSC mapping(s) from {config_file}")
 
     while True:
         readable_sockets, _, _ = select.select(sockets, [], [])
 
         for readable_socket in readable_sockets:
             if readable_socket is artnet_receive_socket:
-                forward_artnet_packet(artnet_receive_socket, artnet_forward_socket)
+                forward_artnet_packet(
+                    artnet_receive_socket,
+                    artnet_forward_socket,
+                    config,
+                )
 
             elif readable_socket is osc_receive_socket:
                 handle_osc_packet(osc_receive_socket, osc_artnet, mapping)
 
 
-def forward_artnet_packet(receive_socket: socket.socket, send_socket: socket.socket):
+def forward_artnet_packet(
+    receive_socket: socket.socket,
+    send_socket: socket.socket,
+    config: AppConfig,
+):
     packet, _sender = receive_socket.recvfrom(1024)
-    send_socket.sendto(packet, (ARTNET_TARGET_IP, ARTNET_PORT))
+    send_socket.sendto(packet, (config.artnet_target_ip, config.artnet_port))
 
 
 def handle_osc_packet(
@@ -102,10 +118,33 @@ def handle_osc_packet(
     artnet.send_data_synced()
 
 
-def load_mapping(path: Path) -> dict[str, OscMapping]:
+def load_config(path: Path) -> AppConfig:
     with path.open("r", encoding="utf-8") as file:
-        raw_mapping = json.load(file)
+        raw_config = json.load(file)
 
+    artnet_config = raw_config["artnet"]
+    osc_config = raw_config["osc"]
+
+    artnet_port = int(artnet_config["port"])
+    osc_listen_port = int(osc_config["listen_port"])
+
+    if not 1 <= artnet_port <= 65535:
+        raise ValueError("Art-Net port must be between 1 and 65535")
+
+    if not 1 <= osc_listen_port <= 65535:
+        raise ValueError("OSC listen port must be between 1 and 65535")
+
+    return AppConfig(
+        artnet_listen_ip=str(artnet_config["listen_ip"]),
+        artnet_target_ip=str(artnet_config["target_ip"]),
+        artnet_port=artnet_port,
+        osc_listen_ip=str(osc_config["listen_ip"]),
+        osc_listen_port=osc_listen_port,
+        osc_mapping=load_mapping(osc_config["mapping"]),
+    )
+
+
+def load_mapping(raw_mapping: dict[str, Any]) -> dict[str, OscMapping]:
     mapping: dict[str, OscMapping] = {}
 
     for osc_address, target in raw_mapping.items():
