@@ -1,3 +1,5 @@
+import json
+from pathlib import Path
 import sys
 import time
 import math
@@ -12,6 +14,9 @@ from pyside6helpers.main_window import MainWindow
 from pyside6helpers.slider import Slider
 
 
+SLIDERS_STATE_FILE = Path(__file__).with_name("sliders.json")
+
+
 class ArtnetWidget(QWidget):
 
     def __init__(self, parent=None):
@@ -21,6 +26,7 @@ class ArtnetWidget(QWidget):
         self._target_ip = settings.value("target_ip", "192.168.20.100")
         self._universe_number = int(settings.value("universe_number", 1))
         self._start_channel = int(settings.value("start_channel", 1))
+        self._slider_state = self._load_slider_state()
 
         self._setup_artnet()
 
@@ -108,16 +114,23 @@ class ArtnetWidget(QWidget):
             ch_idx = i + self._start_channel - 1
             if ch_idx > 511: break
 
+            slider_state = self._slider_state.get(str(ch_idx), {})
+            slider_name = slider_state.get("name", f"CH {ch_idx + 1}")
+            slider_value = int(slider_state.get("value", 0))
+
             container = QWidget()
             v_layout = QVBoxLayout(container)
             v_layout.setContentsMargins(0, 0, 0, 0)
 
             new_slider = Slider(
-                name=f"CH {ch_idx + 1}",
+                name=slider_name,
                 minimum=0, maximum=255,
+                value=slider_value,
                 on_value_changed=lambda value, idx=ch_idx: self._on_slider_value_changed(idx, value),
-                is_vertical=True
+                is_vertical=True,
+                label_editable=True,
             )
+            new_slider.editingCommitted.connect(self._on_slider_name_changed)
             v_layout.addWidget(new_slider)
 
             lfo_check = QCheckBox("LFO")
@@ -163,12 +176,44 @@ class ArtnetWidget(QWidget):
 
     def _on_slider_value_changed(self, idx: int, value: int):
         self._artnet.universes[self._universe_number].buffer[idx] = value
+        self._save_slider_state()
 
         # Sends DMX packets only, no Artsync
         #self._artnet.send_data()
 
         # Sends DMX packets and an Artsync packet as well, useful with several universes
         self._artnet.send_data_synced()
+
+    def _on_slider_name_changed(self, name: str):
+        self._save_slider_state()
+
+    def _load_slider_state(self) -> dict:
+        if not SLIDERS_STATE_FILE.exists():
+            return {}
+
+        try:
+            with SLIDERS_STATE_FILE.open("r", encoding="utf-8") as file:
+                return json.load(file)
+        except (OSError, json.JSONDecodeError):
+            return {}
+
+    def _save_slider_state(self):
+        state = {}
+
+        for i, slider in enumerate(self._sliders):
+            ch_idx = i + self._start_channel - 1
+            if ch_idx > 511:
+                continue
+
+            state[str(ch_idx)] = {
+                "name": slider.name(),
+                "value": slider.value(),
+            }
+
+        self._slider_state.update(state)
+
+        with SLIDERS_STATE_FILE.open("w", encoding="utf-8") as file:
+            json.dump(self._slider_state, file, indent=2)
 
 
 if __name__ == "__main__":
