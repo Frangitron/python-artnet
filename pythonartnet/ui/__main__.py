@@ -66,9 +66,9 @@ class ArtnetWidget(QWidget):
         self._timer = QTimer(self)
         self._timer.setInterval(1000 / 40)
         self._timer.timeout.connect(self._on_timer)
-        self._timer.start()
 
         self._rebuild_sliders()
+        self._timer.start()
 
     def _setup_artnet(self):
         self._artnet = ArtnetBroadcaster(self._target_ip)
@@ -118,6 +118,8 @@ class ArtnetWidget(QWidget):
             slider_name = slider_state.get("name", f"CH {ch_idx + 1}")
             slider_value = int(slider_state.get("value", 0))
 
+            self._artnet.universes[self._universe_number].buffer[ch_idx] = slider_value
+
             container = QWidget()
             v_layout = QVBoxLayout(container)
             v_layout.setContentsMargins(0, 0, 0, 0)
@@ -153,12 +155,12 @@ class ArtnetWidget(QWidget):
 
     def _on_timer(self):
         t = time.time()
-        any_lfo = False
+
         for i, lfo_check in enumerate(self._lfo_checkboxes):
             if lfo_check.isChecked():
-                any_lfo = True
                 ch_idx = i + self._start_channel - 1
-                if ch_idx > 511: continue
+                if ch_idx > 511:
+                    continue
 
                 # cos(t) ranges from -1 to 1.
                 # (cos(t) + 1) / 2 ranges from 0 to 1.
@@ -172,8 +174,7 @@ class ArtnetWidget(QWidget):
                 self._sliders[i].slider.blockSignals(False)
                 self._sliders[i]._update_label(val)
 
-        if any_lfo:
-            self._artnet.send_data_synced()
+        self._artnet.send_data_synced()
 
     def _on_slider_value_changed(self, idx: int, value: int):
         self._artnet.universes[self._universe_number].buffer[idx] = value
