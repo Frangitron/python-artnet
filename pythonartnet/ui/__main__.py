@@ -134,6 +134,7 @@ class ArtnetWidget(QWidget):
             v_layout.addWidget(new_slider)
 
             lfo_check = QCheckBox("LFO")
+            lfo_check.setChecked(slider_state.get("lfo_on", False))
             v_layout.addWidget(lfo_check)
 
             self._sliders.append(new_slider)
@@ -208,6 +209,7 @@ class ArtnetWidget(QWidget):
             state[str(ch_idx)] = {
                 "name": slider.name(),
                 "value": slider.value(),
+                "lfo_on": self._lfo_checkboxes[i].isChecked()
             }
 
         self._slider_state.update(state)
